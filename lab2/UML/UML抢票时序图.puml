@@ -1,0 +1,52 @@
+@startuml
+title UML 时序图：最后一张票并发竞争与候补递补
+skinparam defaultFontName Microsoft YaHei
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+autonumber
+
+actor "参与者A" as A
+actor "参与者B" as B
+participant "Web UI" as UI
+participant "报名API" as API
+participant "库存/订单服务" as S
+database "数据库" as DB
+participant "到期任务" as Job
+participant "站内通知" as N
+
+par 同时提交
+  A -> UI : 报名活动(requestId=A1)
+  UI -> API : POST /registrations
+  API -> S : 校验角色、放票期、幂等键
+  S -> DB : 原子占用最后1张并写待支付订单
+  DB --> S : 占位成功，剩余=0
+  S --> API : 待支付，截止15分钟
+  API --> UI : 返回订单
+  UI --> A : 展示确认支付
+else 同时提交
+  B -> UI : 报名活动(requestId=B1)
+  UI -> API : POST /registrations
+  API -> S : 校验角色、放票期、幂等键
+  S -> DB : 原子尝试占用
+  DB --> S : 无可售名额
+  S --> API : 售罄，可选候补
+  API --> UI : 无票提示
+  UI --> B : 是否进入候补？
+end
+B -> UI : 确认候补
+UI -> API : POST /waitlist
+API -> DB : 写候补序号
+DB --> API : 候补成功
+API --> B : 显示排队状态
+
+... A未支付满15分钟 ...
+Job -> S : 检查待支付订单到期
+S -> DB : 同事务：订单超时、释放名额、队首转待支付
+DB --> S : B获得名额，A只释放一次
+S -> N : B获得15分钟支付资格
+N --> B : 站内消息
+note over S,DB
+  原子库存条件更新 + 未结束报名唯一约束；
+  相同requestId重试返回原结果。
+end note
+@enduml
