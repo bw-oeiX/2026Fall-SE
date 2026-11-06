@@ -90,4 +90,4 @@
 | 仓库地址 | https://github.com/bw-oeiX/2026Fall-SE |
 | 分支名称 | `main` |
 | `lab1-ai-draft` 完整提交哈希 | `1d552bbdefde5a0de68b0b6131eed5489816c809` |
-| `lab1-final` 完整提交哈希 | 还没有，一会儿搞 |
+| `lab1-final` 完整提交哈希 | `fcde9a2e372cce24089086d9abc0651325a7abc0` |
