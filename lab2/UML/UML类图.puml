@@ -1,0 +1,140 @@
+@startuml
+title UML 类图：活动票务领域模型（REQ-001～034）
+skinparam defaultFontName Microsoft YaHei
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam backgroundColor #FFFFFF
+skinparam classBackgroundColor #F4F8FF
+skinparam classBorderColor #3766A6
+hide empty methods
+
+enum Role {
+  PARTICIPANT
+  ORGANIZER
+  CHECKER
+  ADMIN
+}
+enum EventStatus {
+  DRAFT
+  UNDER_REVIEW
+  PUBLISHED
+  CANCELLED
+  REMOVED
+}
+enum RegistrationStatus {
+  WAITLISTED
+  PENDING_PAYMENT
+  PURCHASED
+  CANCELLED
+  CHECKED_IN
+  ABSENT
+  INVALID
+}
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  CANCELLED
+  REFUNDED
+  TIMED_OUT
+}
+enum TicketStatus {
+  VALID
+  CHECKED
+  INVALID
+}
+
+class User {
+  +id: UUID
+  +username: String <<unique>>
+  +passwordHash: String
+  +email: String <<unique>>
+  +phone: String <<unique>>
+  +role: Role
+  +restricted: Boolean
+}
+class Category {
+  +id: UUID
+  +name: String <<unique>>
+  +enabled: Boolean
+}
+class Event {
+  +id: UUID
+  +name: String
+  +description: String
+  +location: String
+  +status: EventStatus
+  +saleStart: DateTime
+  +saleEnd: DateTime
+  +capacity: Integer
+  +/occupied: Integer
+}
+class Session {
+  +id: UUID
+  +startAt: DateTime
+  +endAt: DateTime
+}
+class TicketType {
+  +id: UUID
+  +name: String
+  +price: Decimal
+}
+class Registration {
+  +id: UUID
+  +status: RegistrationStatus
+  +queueSeq: Long
+  +createdAt: DateTime
+  +idempotencyKey: String
+}
+class Order {
+  +id: UUID
+  +status: OrderStatus
+  +amount: Decimal
+  +createdAt: DateTime
+  +payDeadline: DateTime
+}
+class Ticket {
+  +id: UUID
+  +code: String <<unique>>
+  +status: TicketStatus
+  +checkedAt: DateTime
+}
+class Report {
+  +id: UUID
+  +reason: String
+  +result: String
+  +createdAt: DateTime
+}
+class AuditLog {
+  +id: UUID
+  +actorId: UUID
+  +objectId: UUID
+  +action: String
+  +before: String
+  +after: String
+  +result: String
+  +requestId: String
+  +createdAt: DateTime
+}
+
+User "1" -- "0..*" Event : 组织者
+Category "1" -- "0..*" Event : 分类
+Event "1" *-- "1" Session : 恰好一个场次
+Session "1" *-- "1" TicketType : 恰好一个票种
+User "1" -- "0..*" Registration : 参与者
+TicketType "1" -- "0..*" Registration : 报名/候补
+Registration "1" -- "0..1" Order : 获得名额后
+Order "1" -- "0..1" Ticket : 支付后出票
+User "1" -- "0..*" Report : 举报人
+Event "1" -- "0..*" Report : 被举报
+User "1" -- "0..*" AuditLog : 操作人
+
+note bottom of Registration
+  同一参与者对同一活动最多一条未结束报名；
+  候补不占库存，重新报名生成新记录。
+end note
+note bottom of Event
+  occupied = 有效待支付订单 + 已支付未退款订单；
+  0 <= occupied <= capacity。
+end note
+@enduml
+
