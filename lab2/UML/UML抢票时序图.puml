@@ -1,8 +1,10 @@
 @startuml
-title UML 时序图：最后一张票并发竞争与候补递补
+title UML 抢票时序图：并发抢最后一张票后，两种支付结果
 skinparam defaultFontName Microsoft YaHei
 skinparam shadowing false
 skinparam backgroundColor #FFFFFF
+skinparam sequenceMessageAlign center
+hide footbox
 autonumber
 
 actor "参与者A" as A
@@ -14,39 +16,68 @@ database "数据库" as DB
 participant "到期任务" as Job
 participant "站内通知" as N
 
-par 同时提交
-  A -> UI : 报名活动(requestId=A1)
+== 共同过程：A、B 并发争抢最后一张票 ==
+par A 提交报名
+  A -> UI : 报名(requestId=A1)
   UI -> API : POST /registrations
-  API -> S : 校验角色、放票期、幂等键
-  S -> DB : 原子占用最后1张并写待支付订单
-  DB --> S : 占位成功，剩余=0
-  S --> API : 待支付，截止15分钟
-  API --> UI : 返回订单
-  UI --> A : 展示确认支付
-else 同时提交
-  B -> UI : 报名活动(requestId=B1)
+  API -> S : 校验权限、放票期、幂等键
+  S -> DB : 原子占用最后1张；写待支付订单
+  DB --> S : A成功，剩余名额=0
+  S --> API : 返回订单与15分钟支付截止时刻
+  API --> UI : 待支付订单
+  UI --> A : 显示确认支付入口
+else B 同时提交
+  B -> UI : 报名(requestId=B1)
   UI -> API : POST /registrations
-  API -> S : 校验角色、放票期、幂等键
+  API -> S : 校验权限、放票期、幂等键
   S -> DB : 原子尝试占用
   DB --> S : 无可售名额
-  S --> API : 售罄，可选候补
+  S --> API : 售罄，可选择候补
   API --> UI : 无票提示
-  UI --> B : 是否进入候补？
+  UI --> B : 询问是否加入候补
 end
-B -> UI : 确认候补
-UI -> API : POST /waitlist
-API -> DB : 写候补序号
-DB --> API : 候补成功
-API --> B : 显示排队状态
 
-... A未支付满15分钟 ...
-Job -> S : 检查待支付订单到期
-S -> DB : 同事务：订单超时、释放名额、队首转待支付
-DB --> S : B获得名额，A只释放一次
-S -> N : B获得15分钟支付资格
-N --> B : 站内消息
+group B 自愿进入候补，不占库存
+  B -> UI : 确认候补
+  UI -> API : POST /waitlist
+  API -> DB : 写入候补序号
+  DB --> API : 候补成功
+  API --> B : 显示排队状态
+end
+
+note over S,Job
+  以下超时分支假定：到期时仍在放票期，
+  距活动开始至少12小时，B符合递补条件。
+end note
+
+== 互斥结果：A 支付成功 / A 到期未支付 ==
+alt #EAF7EB A 在截止前点击“确认支付”
+  A -> UI : 确认支付(requestId=A-pay)
+  UI -> API : POST /orders/{id}/pay
+  API -> S : 校验订单仍待支付、未到期
+  S -> DB : 同事务：订单已支付、报名购票成功、生成电子票
+  DB --> S : 成功；名额继续由A占用
+  S --> API : 返回电子票
+  API --> UI : 支付成功
+  UI --> A : 展示成功提示与票码
+  note over B,DB #EAF7EB
+    B保持候补中；没有空出的名额，
+    不生成B的待支付订单。
+  end note
+else #FFF1E6 A 到期仍未支付
+  Job -> S : 检查待支付订单到期
+  S -> DB : 同事务：A订单超时、释放名额、队首B递补占位
+  DB --> S : A失效；B转待支付；剩余名额仍为0
+  S -> N : 通知B获得15分钟支付资格
+  N --> B : 站内消息与支付截止时刻
+  note over S,DB #FFF1E6
+    A的名额仅释放一次；B按候补顺序获得。
+    若不满足递补时间条件，则只释放名额，不创建B订单。
+  end note
+end
+
 note over S,DB
-  原子库存条件更新 + 未结束报名唯一约束；
-  相同requestId重试返回原结果。
+  报名与库存写入受原子条件更新、未结束报名唯一约束保护；
+  相同requestId重复提交返回原结果，不重复扣票或出票。
 end note
 @enduml

@@ -1,60 +1,83 @@
 @startuml
-title UML 用例图：四类角色的业务边界
+title UML 用例图：活动票务与报名系统
+left to right direction
 skinparam defaultFontName Microsoft YaHei
 skinparam shadowing false
 skinparam backgroundColor #FFFFFF
-left to right direction
+skinparam packageStyle rectangle
+skinparam linetype ortho
 
 actor "访客" as Guest
-actor "参与者" as P
-actor "活动组织者" as O
-actor "检票人员" as C
-actor "平台管理员" as A
+actor "已登录用户" as SignedIn
+actor "参与者" as Participant
+actor "活动组织者" as Organizer
+actor "检票人员" as Checker
+actor "平台管理员" as Admin
+
+SignedIn <|-- Participant
+SignedIn <|-- Organizer
+SignedIn <|-- Checker
+SignedIn <|-- Admin
 
 rectangle "活动票务与报名系统" {
-  usecase "浏览/组合查询活动" as UC1
-  usecase "注册/登录/改密" as UC2
-  usecase "报名与模拟支付" as UC3
-  usecase "候补/自动递补" as UC4
-  usecase "退票/查看电子票" as UC5
-  usecase "举报活动" as UC6
-  usecase "创建草稿/提交审核" as UC7
-  usecase "取消活动/看统计" as UC8
-  usecase "审核发布/驳回" as UC9
-  usecase "核查举报/下架" as UC10
-  usecase "创建检票员账号/限制权限" as UC11
-  usecase "选择活动验票签到" as UC12
-  usecase "查看/导出名单" as UC13
-  usecase "查询操作记录" as UC14
+  package "访客入口" {
+    usecase "浏览/组合查询活动" as Browse
+    usecase "注册参与者或组织者" as Register
+    usecase "选择身份并登录" as Login
+  }
+  package "登录后的账号操作" {
+    usecase "修改本人密码" as ChangePassword
+    usecase "登出" as Logout
+  }
+  package "参与者业务" {
+    usecase "报名与模拟支付" as Buy
+    usecase "候补与递补" as Waitlist
+    usecase "退票/查看电子票" as Ticket
+    usecase "举报活动" as Report
+  }
+  package "组织者业务" {
+    usecase "创建草稿/提交审核" as Submit
+    usecase "取消活动/查看统计" as EventStats
+    usecase "查看/导出名单" as OrganizerList
+  }
+  package "检票业务" {
+    usecase "验票签到" as CheckIn
+    usecase "查看/导出名单" as CheckerList
+  }
+  package "平台治理" {
+    usecase "审核发布/驳回" as Review
+    usecase "核查举报/下架" as Remove
+    usecase "创建工作人员账号/限制权限" as ManageAccount
+    usecase "查看/导出名单" as AdminList
+    usecase "查询操作记录" as Audit
+  }
 }
 
-Guest --> UC1
-P --> UC1
-P --> UC2
-P --> UC3
-P --> UC4
-P --> UC5
-P --> UC6
-O --> UC2
-O --> UC7
-O --> UC8
-O --> UC13
-C --> UC2
-C --> UC12
-C --> UC13
-A --> UC2
-A --> UC9
-A --> UC10
-A --> UC11
-A --> UC13
-A --> UC14
+Guest -- Browse
+Guest -- Register
+Guest -- Login
+SignedIn -- ChangePassword
+SignedIn -- Logout
+Participant -- Buy
+Participant -- Waitlist
+Participant -- Ticket
+Participant -- Report
+Organizer -- Submit
+Organizer -- EventStats
+Organizer -- OrganizerList
+Checker -- CheckIn
+Checker -- CheckerList
+Admin -- Review
+Admin -- Remove
+Admin -- ManageAccount
+Admin -- AdminList
+Admin -- Audit
 
-UC3 ..> UC5 : <<出票后可查看>>
-UC4 ..> UC3 : <<递补后待支付>>
-UC10 ..> UC6 : <<基于举报>>
-note right of UC12
-  管理员创建检票员账号并线下交付；
-  系统暂不设计逐活动授权。
-  该简化口径待甲方确认。
-end note
+legend bottom
+  已登录用户是四类角色的共同抽象，并非第五种账号。
+  访客登录时先选身份，再输入用户名、手机号和密码；登出后返回访客。
+  访客仅能自行注册参与者或活动组织者，检票人员和管理员账号由管理员创建。
+  检票人员账号由管理员线下交付，系统不设置逐活动授权；该简化口径已确认。
+endlegend
 @enduml
+

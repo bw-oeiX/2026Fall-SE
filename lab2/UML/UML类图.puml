@@ -1,140 +1,105 @@
 @startuml
-title UML 类图：活动票务领域模型（REQ-001～034）
+title UML 类图：活动票务核心领域模型
+top to bottom direction
 skinparam defaultFontName Microsoft YaHei
 skinparam shadowing false
-skinparam classAttributeIconSize 0
 skinparam backgroundColor #FFFFFF
 skinparam classBackgroundColor #F4F8FF
 skinparam classBorderColor #3766A6
-hide empty methods
+skinparam classAttributeIconSize 0
+skinparam linetype polyline
+hide empty members
 
-enum Role {
-  PARTICIPANT
-  ORGANIZER
-  CHECKER
-  ADMIN
+abstract class "用户 User" as User {
+  +id: UUID [可空]
+  +username: String [可空]
+  +phone: String [可空]
+  +passwordHash: String [可空]
 }
-enum EventStatus {
-  DRAFT
-  UNDER_REVIEW
-  PUBLISHED
-  CANCELLED
-  REMOVED
+class "匿名用户" as Guest {
+  +查询已发布活动()
 }
-enum RegistrationStatus {
-  WAITLISTED
-  PENDING_PAYMENT
-  PURCHASED
-  CANCELLED
-  CHECKED_IN
-  ABSENT
-  INVALID
+class "实名用户（参与者）" as Participant {
+  +报名或候补()
+  +取消与退票()
 }
-enum OrderStatus {
-  PENDING_PAYMENT
-  PAID
-  CANCELLED
-  REFUNDED
-  TIMED_OUT
+class "活动发布者" as Organizer {
+  +创建并提交活动()
+  +取消本人活动()
 }
-enum TicketStatus {
-  VALID
-  CHECKED
-  INVALID
+class "检票员" as Checker {
+  +核验票并签到()
 }
+class "平台管理员" as Admin {
+  +审核活动()
+  +处理举报与权限()
+}
+User <|-- Guest
+User <|-- Participant
+User <|-- Organizer
+User <|-- Checker
+User <|-- Admin
 
-class User {
+class "活动类别" as Category {
   +id: UUID
-  +username: String <<unique>>
-  +passwordHash: String
-  +email: String <<unique>>
-  +phone: String <<unique>>
-  +role: Role
-  +restricted: Boolean
-}
-class Category {
-  +id: UUID
-  +name: String <<unique>>
+  +name: String
   +enabled: Boolean
 }
-class Event {
+class "活动" as Event {
   +id: UUID
   +name: String
-  +description: String
-  +location: String
-  +status: EventStatus
-  +saleStart: DateTime
-  +saleEnd: DateTime
-  +capacity: Integer
-  +/occupied: Integer
-}
-class Session {
-  +id: UUID
+  +categoryId: UUID
   +startAt: DateTime
   +endAt: DateTime
-}
-class TicketType {
-  +id: UUID
-  +name: String
+  +saleStart: DateTime
+  +saleEnd: DateTime
   +price: Decimal
+  +capacity: Integer
+  +/occupied: Integer
+  +status: String
 }
-class Registration {
+class "报名" as Registration {
   +id: UUID
-  +status: RegistrationStatus
+  +status: String
   +queueSeq: Long
-  +createdAt: DateTime
-  +idempotencyKey: String
+  +requestId: String
 }
-class Order {
+class "订单" as Order {
   +id: UUID
-  +status: OrderStatus
   +amount: Decimal
-  +createdAt: DateTime
+  +status: String
   +payDeadline: DateTime
 }
-class Ticket {
+class "电子票" as Ticket {
   +id: UUID
-  +code: String <<unique>>
-  +status: TicketStatus
+  +code: String
+  +status: String
   +checkedAt: DateTime
 }
-class Report {
-  +id: UUID
-  +reason: String
-  +result: String
-  +createdAt: DateTime
-}
-class AuditLog {
-  +id: UUID
-  +actorId: UUID
-  +objectId: UUID
-  +action: String
-  +before: String
-  +after: String
-  +result: String
-  +requestId: String
-  +createdAt: DateTime
-}
+Organizer "1" -- "0..*" Event : 创建与管理
+Category "1" -- "0..*" Event : 归类
+Event "1" -- "0..*" Registration : 接受报名
+Participant "1" -- "0..*" Registration : 发起
+Registration "1" -- "0..1" Order : 获得名额后产生
+Order "1" -- "0..1" Ticket : 模拟支付后出票
 
-User "1" -- "0..*" Event : 组织者
-Category "1" -- "0..*" Event : 分类
-Event "1" *-- "1" Session : 恰好一个场次
-Session "1" *-- "1" TicketType : 恰好一个票种
-User "1" -- "0..*" Registration : 参与者
-TicketType "1" -- "0..*" Registration : 报名/候补
-Registration "1" -- "0..1" Order : 获得名额后
-Order "1" -- "0..1" Ticket : 支付后出票
-User "1" -- "0..*" Report : 举报人
-Event "1" -- "0..*" Report : 被举报
-User "1" -- "0..*" AuditLog : 操作人
-
-note bottom of Registration
-  同一参与者对同一活动最多一条未结束报名；
-  候补不占库存，重新报名生成新记录。
+note left of User
+  匿名用户无账号，不持久化；其余四类账号须有手机号。
+  这里“实名用户”指普通参与者，不增加身份核验。
+  类型由子类表达，领域模型不另设 role 字段。
 end note
 note bottom of Event
-  occupied = 有效待支付订单 + 已支付未退款订单；
+  一个活动仅一个场次、一个票种，时间、价格和容量直接归活动。
+  occupied = 有效待支付订单数 + 已支付未退款订单数；
   0 <= occupied <= capacity。
+end note
+note right of Ticket
+  检票员核验电子票；平台管理员审核活动。
+  举报与操作记录单独放在治理类图中。
+end note
+note bottom of Registration
+  候补不占库存；同一参与者对同一活动
+  同时最多一条未结束报名。
 end note
 @enduml
 
