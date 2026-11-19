@@ -1,0 +1,44 @@
+@startuml
+title UML 组件图：模块划分与交互
+skinparam defaultFontName Microsoft YaHei
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam backgroundColor #FFFFFF
+skinparam componentBackgroundColor #F4F8FF
+skinparam componentBorderColor #3766A6
+left to right direction
+
+actor "参与者/组织者/检票员/管理员" as Client
+component "Web UI\n角色页面与失败反馈" as UI
+component "API 网关\n鉴权、请求标识" as API
+component "账号与权限模块" as Auth
+component "活动与治理模块\n类别、审核、举报" as EventSvc
+component "报名订单模块\n库存、模拟支付、候补" as OrderSvc
+component "票务检票模块\n出票、签到、缺席" as TicketSvc
+component "统计导出模块\n名单、CSV、审计查询" as StatSvc
+component "定时任务\n支付超时、缺席、重启补偿" as Job
+component "站内通知" as Notice
+database "关系数据库\n事务、唯一约束、审计表" as DB
+
+Client --> UI
+UI --> API : HTTPS/JSON
+API --> Auth : 身份/角色/归属检查
+API --> EventSvc : 活动与举报
+API --> OrderSvc : 报名/支付/退票
+API --> TicketSvc : 验票/签到
+API --> StatSvc : 查询/导出
+EventSvc --> DB
+OrderSvc --> DB : 原子占位/释放
+TicketSvc --> DB : 票与签到事务
+StatSvc --> DB : 只读聚合/审计
+Job --> OrderSvc : 处理到期订单/递补
+Job --> TicketSvc : 标记缺席
+OrderSvc --> Notice : 递补/支付状态
+EventSvc --> Notice : 取消/下架
+Notice --> DB : 保存站内消息
+
+note bottom of OrderSvc
+  数据库事务边界：报名、订单、库存和日志整体提交。
+  不连接真实支付网关。
+end note
+@enduml
